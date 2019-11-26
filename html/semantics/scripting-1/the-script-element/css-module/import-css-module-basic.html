@@ -1,0 +1,52 @@
+<!doctype html>
+
+<head>
+    <title>import-css-module-basic</title>
+    <script src="/resources/testharness.js"></script>
+    <script src="/resources/testharnessreport.js"></script>
+</head>
+
+<body>
+    <h1>import-css-module-basic</h1>
+    <script type="module">
+        import v from "./resources/basic.css";
+        document.adoptedStyleSheets = [v];
+        test(function () {
+            assert_equals(getComputedStyle(document.querySelector('#test'))
+                .backgroundColor, "rgb(255, 0, 0)",
+                "CSS module should import correctly on top level document");
+        }, "Test basic CSS module import");
+    </script>
+
+    <script type="module">
+        async_test(function (test) {
+            let iframe = document.createElement("iframe");
+            iframe.src = "resources/css_module_at_import_iframe.html";
+            iframe.onload = test.step_func_done(function () {
+                assert_equals(iframe.contentDocument.load_error, "NotAllowedError");
+                assert_not_equals(getComputedStyle(iframe.contentDocument.querySelector('#test'))
+                    .backgroundColor, "rgb(255, 0, 0)",
+                    "CSS module @import should not succeed");
+            });
+            document.body.appendChild(iframe);
+        }, "An @import CSS Module should not load");
+    </script>
+
+    <script type="module">
+        async_test(function (test) {
+            let iframe = document.createElement("iframe");
+            iframe.src = "resources/malformed.html";
+            iframe.onload = test.step_func_done(function () {
+                assert_equals(iframe.contentDocument.load_error, "ParseError");
+                assert_not_equals(getComputedStyle(iframe.contentDocument.querySelector('#test'))
+                    .backgroundColor, "rgb(255, 0, 0)",
+                    "Malformed CSS should throw parse error");
+            });
+            document.body.appendChild(iframe);
+        }, "Malformed CSS should throw parse error");
+    </script>
+
+    <div id="test">
+        I am a test div.
+    </div>
+</body>
