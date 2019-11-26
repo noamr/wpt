@@ -9,6 +9,9 @@
 <script src="/resources/testharnessreport.js"></script>
 </head>
 <body>
+<infinite-cloning-element-1></infinite-cloning-element-1>
+<infinite-cloning-element-2 id="a"></infinite-cloning-element-2>
+<infinite-cloning-element-2 id="b"></infinite-cloning-element-2>
 <div id="log"></div>
 <script>
 
@@ -97,16 +100,60 @@ test(function () {
     assert_equals(log.length, 4);
     var instanceClone = instance.cloneNode(false);
 
-    assert_equals(log.length, 8);
+    assert_equals(log.length, 6);
     assert_array_equals(log[0], [instance, 'begin']);
     assert_array_equals(log[1], [instance, 'end']);
     assert_array_equals(log[2], [anotherInstance, 'begin']);
     assert_array_equals(log[3], [anotherInstance, 'end']);
     assert_array_equals(log[4], [instanceClone, 'begin']);
-    assert_array_equals(log[5], [anotherInstanceClone, 'begin']);
-    assert_array_equals(log[6], [anotherInstanceClone, 'end']);
-    assert_array_equals(log[7], [instanceClone, 'end']);
+    // This is a recursive constructor call, and should early-out in step 4.13.5.1.
+    // assert_array_equals(log[5], [anotherInstanceClone, 'begin']);
+    // assert_array_equals(log[6], [anotherInstanceClone, 'end']);
+    assert_array_equals(log[5], [instanceClone, 'end']);
 }, 'Calling Node.prototype.cloneNode(false) must push a new element queue to the processing stack');
+
+test(function () {
+    var log = [];
+
+    customElements.define('infinite-cloning-element-1',class extends HTMLElement {
+        constructor() {
+            super();
+            log.push([this, 'begin']);
+            // Potential infinite recursion:
+            customElements.upgrade(this);
+            log.push([this, 'end']);
+        }
+    });
+
+    assert_equals(log.length, 2);
+    const instance = document.querySelector("infinite-cloning-element-1");
+    assert_array_equals(log[0], [instance, 'begin']);
+    assert_array_equals(log[1], [instance, 'end']);
+}, 'Infinite constructor recursion with upgrade(this) should not be possible');
+
+test(function () {
+    var log = [];
+
+    customElements.define('infinite-cloning-element-2',class extends HTMLElement {
+        constructor() {
+            super();
+            log.push([this, 'begin']);
+            const b = document.querySelector("#b");
+            b.remove();
+            // While this constructor is running for "a", "b" is still
+            // undefined, and so inserting it into the document will enqueue a
+            // second upgrade reaction for "b" in addition to the one enqueued
+            // by defining x-foo.
+            document.body.appendChild(b);
+            log.push([this, 'end']);
+        }
+    });
+
+    assert_equals(log.length, 2);
+    const instance = document.querySelector("#a");
+    assert_array_equals(log[0], [instance, 'begin']);
+    assert_array_equals(log[1], [instance, 'end']);
+}, 'Infinite constructor recursion with appendChild should not be possible');
 
 </script>
 </body>
