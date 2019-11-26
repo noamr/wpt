@@ -6,6 +6,11 @@
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
 <script src="../../testcommon.js"></script>
+<style>
+  .pseudo::before {content: 'foo'; display: inline-block;}
+  .pseudoa::before {margin-left: 10px;}
+  .pseudob::before {margin-left: 20px;}
+</style>
 <body>
 <div id="log"></div>
 <script>
@@ -104,6 +109,60 @@ promise_test(async t => {
   // style.
   await waitForNextFrame();
 }, 'Target element can be set to a foreign element');
+
+
+function pseudoTargetTest(a, b) {
+  a.classList.add('pseudoa');
+  b.classList.add('pseudob');
+  // sync on updating the pseudo-elements
+  getComputedStyle(a,"::before").content;
+  getComputedStyle(b,"::before").content;
+  const anim = a.animate(gKeyFrames, {duration: 100 * MS_PER_SEC, pseudoElement: '::before'});
+
+  anim.currentTime = 50 * MS_PER_SEC;
+  anim.effect.target = b;
+  assert_equals(anim.effect.target, b,
+                "Animation targets specified element (target element)");
+  assert_equals(anim.effect.pseudoElement, '::before',
+                "Animation targets specified element (pseudo-selector)");
+  assert_equals(getComputedStyle(a, '::before').marginLeft, '10px',
+                'Value of 1st element (currently not targeted) after ' +
+                'changing the effect target');
+  assert_equals(getComputedStyle(b, '::before').marginLeft, '50px',
+                'Value of 2nd element (currently targeted) after ' +
+                'changing the effect target');
+}
+
+test(t => {
+  const a = createDiv(t);
+  const b = createDiv(t);
+  a.classList.add('pseudo');
+  b.classList.add('pseudo');
+  pseudoTargetTest(a,b)
+}, 'Test setting target from an existing pseudo-element to another existing pseudo-element');
+
+test(t => {
+  const a = createDiv(t);
+  const b = createDiv(t);
+  b.classList.add('pseudo');
+  pseudoTargetTest(a,b)
+}, 'Test setting target from a non-existing pseudo-element to an existing pseudo-element');
+
+test(t => {
+  const a = createDiv(t);
+  const b = createDiv(t);
+  a.classList.add('pseudo');
+  pseudoTargetTest(a,b)
+}, 'Test setting target from an existing pseudo-element to a non-existing pseudo-element');
+
+test(t => {
+  const a = createDiv(t);
+  const b = createDiv(t);
+  pseudoTargetTest(a,b)
+}, 'Test setting target from a non-existing pseudo-element to another non-existing pseudo-element');
+
+
+
 
 </script>
 </body>

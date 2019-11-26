@@ -251,6 +251,12 @@ test(t => {
 
 test(t => {
   const div = createDiv(t);
+  const anim = div.animate(null, {pseudoElement: '::before'});
+  assert_class_string(anim, 'Animation', 'The returned object is an Animation');
+}, 'animate() with pseudoElement parameter without content creates an Animation object');
+
+test(t => {
+  const div = createDiv(t);
   div.classList.add('pseudo');
   div.style.display = 'list-item';
   const anim = div.animate(null, {pseudoElement: '::marker'});
@@ -268,31 +274,44 @@ test(t => {
 test(t => {
   const div = createDiv(t);
   div.classList.add('pseudo');
+  getComputedStyle(div,"::before").content;
   const anim = div.animate(null, {pseudoElement: '::before'});
+  assert_equals(anim.effect.target, div, 'The returned element has the correct target element');
   assert_equals(anim.effect.pseudoElement, '::before',
                 'The returned Animation targets to the correct selector');
 }, 'animate() with pseudoElement an Animation object targeting ' +
    'to the correct pseudo-element');
+
+   test(t => {
+  const div = createDiv(t);
+  const anim = div.animate(null, {pseudoElement: '::before'});
+  assert_equals(anim.effect.target, div, 'The returned element has the correct target element');
+  assert_equals(anim.effect.pseudoElement, '::before',
+                'The returned Animation targets to the correct selector');
+}, 'animate() with pseudoElement without content creates an Animation object targeting ' +
+   'the correct pseudo-element');
 
 test(t => {
   const div = createDiv(t);
   div.classList.add('pseudo');
   div.style.display = 'list-item';
   const anim = div.animate(null, {pseudoElement: '::marker'});
+  assert_equals(anim.effect.target, div, 'The returned element has the correct target element');
   assert_equals(anim.effect.pseudoElement, '::marker',
                 'The returned Animation targets to the correct selector');
 }, 'animate() with pseudoElement an Animation object targeting ' +
-   'to the correct pseudo-element for ::marker');
+   'the correct pseudo-element for ::marker');
 
 test(t => {
   const div = createDiv(t);
   div.classList.add('pseudo');
   div.textContent = 'foo';
   const anim = div.animate(null, {pseudoElement: '::first-line'});
+  assert_equals(anim.effect.target, div, 'The returned element has the correct target element');
   assert_equals(anim.effect.pseudoElement, '::first-line',
                 'The returned Animation targets to the correct selector');
 }, 'animate() with pseudoElement an Animation object targeting ' +
-   'to the correct pseudo-element for ::first-line');
+   'the correct pseudo-element for ::first-line');
 
 </script>
 </body>
