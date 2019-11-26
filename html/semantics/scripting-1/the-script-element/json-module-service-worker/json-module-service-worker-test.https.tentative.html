@@ -1,0 +1,34 @@
+<!doctype html>
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+
+<script>
+    await promise_test((test) => {
+        test.add_cleanup(async () => {
+            return service_worker_unregister(test, scope);
+        });
+        await service_worker_unregister(test, scope);
+        return navigator.serviceWorker.register('./serviceworker.js', { type: 'module' })
+            .then((reg) => {
+                //registration successful
+                assert_not_equals(reg.installing, undefined);
+                assert_true(true, "Javascript importing JSON Module loaded successfully within the context of a service worker")
+            });
+    }, "Javascript importing JSON Module should load within the context of a service worker");
+</script>
+
+<script>
+    await promise_test((test) => {
+        test.add_cleanup(async () => {
+            return service_worker_unregister(test, scope);
+        });
+        await service_worker_unregister(test, scope);
+        return navigator.serviceWorker.register('./module.json', { type: 'module' })
+            .then((reg) => {
+                //registration successful
+                assert_not_equals(reg.installing, undefined);
+                assert_true(true, "JSON Module loaded successfully within the context of a service worker")
+            });
+    }, "JSON Modules should load within the context of a service worker");
+</script>
