@@ -1,0 +1,26 @@
+<!doctype html>
+<title>SVG Test: foreignObject in non-rendered SVG element not rendered (crash).</title>
+<link rel="help" href="https://www.w3.org/TR/SVG2/render.html#Rendered-vs-NonRendered">
+<link rel="help" href="https://crbug.com/1027905">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<style>
+  div { writing-mode: vertical-rl; }
+  div > svg { float: right; }
+</style>
+<svg>
+  <radialGradient id="gradient">
+    <pattern>
+      <foreignObject>
+        <div id="foRoot">
+          <svg><rect fill="url(#gradient)" /></svg>
+        </div>
+      </foreignObject>
+    </pattern>
+  </radialGradient>
+</svg>
+<script>
+  test(() => {
+    assert_equals(getComputedStyle(foRoot).width, "auto", "Non-rendered block should have width computed to 'auto'.");
+  }, "Test that there is no crash forcing layout with a foreignObject inside non-rendered SVG.");
+</script>
