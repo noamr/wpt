@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<title>list-style-image interpolation</title>
+<link rel="help" href="https://drafts.csswg.org/css-lists-3/#propdef-list-style-image">
+<meta name="assert" content="list-style-image supports animation">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/css/support/interpolation-testcommon.js"></script>
+
+<style>
+.parent {
+  list-style-image: url(../resources/blue-20.png);
+}
+.target {
+  background-color: black;
+  width: 100px;
+  list-style-image: url(../resources/green-20.png);
+}
+.expected {
+  background-color: green;
+}
+</style>
+
+<body>
+<template id="target-template">
+  <ul>
+    <li class="target"></li>
+  </ul>
+</template>
+<script>
+function test_crossfade_interpolation(options) {
+  var fromComputed = options.fromComputed || options.from;
+  test_interpolation({
+    property: 'list-style-image',
+    from: options.from,
+    to: options.to,
+  }, [
+    {at: -0.3, expect: fromComputed},
+    {at: 0, expect: fromComputed},
+    {at: 0.3, expect: 'cross-fade(' + fromComputed + ', ' + options.to + ', 0.3)'},
+    {at: 0.5, expect: 'cross-fade(' + fromComputed + ', ' + options.to + ', 0.5)'},
+    {at: 0.6, expect: 'cross-fade(' + fromComputed + ', ' + options.to + ', 0.6)'},
+    {at: 1, expect: options.to},
+    {at: 1.5, expect: options.to},
+  ]);
+}
+
+test_crossfade_interpolation({
+  from: neutralKeyframe,
+  fromComputed: 'url(../resources/green-20.png)',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+test_no_interpolation({
+  property: 'list-style-image',
+  from: 'initial',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+test_crossfade_interpolation({
+  from: 'inherit',
+  fromComputed: 'url(../resources/blue-20.png)',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+test_crossfade_interpolation({
+  from: 'unset',
+  fromComputed: 'url(../resources/blue-20.png)',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+// Constant image
+test_crossfade_interpolation({
+  from: 'url(../resources/stripes-20.png)',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+// None to image
+test_no_interpolation({
+  property: 'list-style-image',
+  from: 'none',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+// Image to image
+test_crossfade_interpolation({
+  from: 'url(../resources/green-20.png)',
+  to: 'url(../resources/stripes-20.png)',
+});
+
+// Image to gradient
+test_crossfade_interpolation({
+  from: 'url(../resources/green-20.png)',
+  to: 'linear-gradient(45deg, blue, orange)',
+});
+
+// Gradient to gradient
+test_crossfade_interpolation({
+  from: 'linear-gradient(-45deg, red, yellow)',
+  to: 'linear-gradient(45deg, blue, orange)',
+});
+</script>
+</body>
