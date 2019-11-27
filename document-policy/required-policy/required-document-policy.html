@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test advertised required document policy</title>
+    <script src="/resources/testharness.js"></script>
+    <script src="/resources/testharnessreport.js"></script>  </head>
+  <body>
+    <h1>Test advertised required document policy</h1>
+<script>
+// The top-level document has a required document policy. Any requests for
+// documents in child frames must be sent with a required policy header
+// indicating a required polict at least as strict.
+
+callbacks = {};
+
+window.addEventListener('message', ev => {
+  var id = ev.data.id;
+  if (id && callbacks[id]) {
+    callbacks[id](ev.data.requiredPolicy || null);
+  }
+});
+
+async_test(t => {
+  var iframe = document.createElement('iframe');
+  iframe.src = "/document-policy/echo-policy.py?id=1";
+  callbacks["1"] = t.step_func_done(result => {
+    assert_equals(result, "unoptimized-lossless-images;bpp=1.1");
+  });
+  document.body.appendChild(iframe);
+}, "test advertised required document policy with no iframe policy");
+
+async_test(t => {
+  var iframe = document.createElement('iframe');
+  iframe.src = "/document-policy/echo-policy.py?id=2";
+  iframe.policy = "unoptimized-lossless-images;bpp=4";
+  callbacks["2"] = t.step_func_done(result => {
+    assert_equals(result, "unoptimized-lossless-images;bpp=1.1");
+  });
+  document.body.appendChild(iframe);
+}, "test advertised required document policy with looser iframe policy");
+
+async_test(t => {
+  var iframe = document.createElement('iframe');
+  iframe.src = "/document-policy/echo-policy.py?id=3";
+  iframe.policy = "unoptimized-lossless-images;bpp=1.0";
+  callbacks["3"] = t.step_func_done(result => {
+    assert_equals(result, "unoptimized-lossless-images;bpp=1.0");
+  });
+  document.body.appendChild(iframe);
+}, "test advertised required document policy with stricter iframe policy");
+    </script>
+  </body>
+</html>
