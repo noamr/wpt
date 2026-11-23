@@ -102,3 +102,23 @@ for (const contextId of contextIds) {
                 `getContext("${otherId}") returns a ${interfaceNames[otherId]}`);
   }, `getContext("${contextId}") whose options getter throws leaves the context mode as none`);
 }
+
+for (const [firstId, secondId] of [['webgl', 'webgl2'], ['webgl2', 'webgl']]) {
+  test(t => {
+    requireContextId(firstId);
+
+    const canvas = document.createElement('canvas');
+    const error = new Error('options getter');
+    const { options } = optionsWithGetter(() => {
+      throw error;
+    });
+    assert_throws_exactly(error, () => canvas.getContext(secondId, options));
+
+    const firstContext = canvas.getContext(firstId);
+    t.add_cleanup(() => firstContext?.getExtension('WEBGL_lose_context')?.loseContext());
+    assert_true(firstContext instanceof self[interfaceNames[firstId]],
+                `getContext("${firstId}") returns a ${interfaceNames[firstId]}`);
+    assert_equals(canvas.getContext(secondId), null,
+                  `getContext("${secondId}") returns null when context mode is ${firstId}`);
+  }, `getContext("${secondId}") returns null after getContext("${firstId}") and an earlier throwing call`);
+}
