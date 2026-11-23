@@ -14,9 +14,17 @@ const interfaceNames = {
   'webgl2': 'WebGL2RenderingContext',
 };
 
+function loseWebGLContext(context) {
+  if (context && typeof context.getExtension === 'function') {
+    context.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+}
+
 const webglSupport = {};
 for (const contextId of ['webgl', 'webgl2']) {
-  webglSupport[contextId] = new OffscreenCanvas(10, 10).getContext(contextId) !== null;
+  const probeContext = new OffscreenCanvas(10, 10).getContext(contextId);
+  webglSupport[contextId] = probeContext !== null;
+  loseWebGLContext(probeContext);
 }
 
 function requireContextId(contextId) {
@@ -25,10 +33,16 @@ function requireContextId(contextId) {
   }
 }
 
-// Returns options whose getters run callback the first time any of them is invoked. Not every
-// context type (or implementation) reads alpha, but they all read alpha or willReadFrequently.
+// Returns options with non-default values whose getters run callback the first time any of them is
+// invoked, while counting how many times each getter is read. Not every context type (or
+// implementation) reads alpha, but they all read alpha or willReadFrequently.
 function optionsWithGetter(callback) {
-  const state = { called: false };
+  const state = {
+    called: false,
+    alphaCalls: 0,
+    colorSpaceCalls: 0,
+    willReadFrequentlyCalls: 0,
+  };
   const run = value => {
     if (!state.called) {
       state.called = true;
@@ -37,16 +51,44 @@ function optionsWithGetter(callback) {
     return value;
   };
   const options = {
-    get alpha() { return run(true); },
-    get willReadFrequently() { return run(false); },
+    get alpha() {
+      state.alphaCalls++;
+      return run(false);
+    },
+    get colorSpace() {
+      state.colorSpaceCalls++;
+      return run('display-p3');
+    },
+    get willReadFrequently() {
+      state.willReadFrequentlyCalls++;
+      return run(true);
+    },
   };
   return { options, state };
 }
 
+function assertSingleConversion(state) {
+  assert_true(state.called, 'an options getter was invoked');
+  assert_less_than_equal(state.alphaCalls, 1, 'alpha getter is read at most once');
+  assert_less_than_equal(state.colorSpaceCalls, 1, 'colorSpace getter is read at most once');
+  assert_less_than_equal(state.willReadFrequentlyCalls, 1,
+                         'willReadFrequently getter is read at most once');
+}
+
+function assertContextSettings(contextId, context, expectedNonDefault) {
+  if (contextId === 'webgl' || contextId === 'webgl2') {
+    assert_equals(context.getContextAttributes().alpha, !expectedNonDefault,
+                  `${contextId} alpha matches the creating call's settings`);
+  } else if (contextId === '2d') {
+    assert_equals(context.getImageData(0, 0, 1, 1).colorSpace,
+                  expectedNonDefault ? 'display-p3' : 'srgb',
+                  '2d colorSpace matches the creating call\'s settings');
+  }
+}
+
 for (const outerId of contextIds) {
   for (const innerId of contextIds) {
-    test(() => {
-      requireContextId(outerId);
+    test(t => {
       requireContextId(innerId);
 
       const canvas = new OffscreenCanvas(10, 10);
@@ -54,14 +96,19 @@ for (const outerId of contextIds) {
       const { options, state } = optionsWithGetter(() => {
         innerContext = canvas.getContext(innerId);
       });
+      t.add_cleanup(() => loseWebGLContext(innerContext));
       const outerContext = canvas.getContext(outerId, options);
+      if (outerContext !== innerContext) {
+        t.add_cleanup(() => loseWebGLContext(outerContext));
+      }
 
-      assert_true(state.called, 'an options getter was invoked');
+      assertSingleConversion(state);
       assert_true(innerContext instanceof self[interfaceNames[innerId]],
                   `inner getContext("${innerId}") returns a ${interfaceNames[innerId]}`);
       if (outerId === innerId) {
         assert_equals(outerContext, innerContext,
                       'outer getContext() returns the context created by the inner call');
+        assertContextSettings(innerId, outerContext, false);
       } else {
         assert_equals(outerContext, null, 'outer getContext() returns null');
       }
@@ -72,24 +119,69 @@ for (const outerId of contextIds) {
 }
 
 for (const contextId of contextIds) {
-  test(() => {
+  test(t => {
     requireContextId(contextId);
 
     const canvas = new OffscreenCanvas(10, 10);
+    const throwingError = new Error('inner getter');
+    const { options, state } = optionsWithGetter(() => {
+      assert_throws_dom('InvalidStateError', () => canvas.transferToImageBitmap(),
+                        'transferToImageBitmap() throws while context mode is still none');
+      assert_throws_exactly(throwingError, () => canvas.getContext('2d', {
+        get alpha() { throw throwingError; },
+        get willReadFrequently() { throw throwingError; },
+      }));
+    });
+    const context = canvas.getContext(contextId, options);
+    t.add_cleanup(() => loseWebGLContext(context));
+
+    assertSingleConversion(state);
+    assert_true(context instanceof self[interfaceNames[contextId]],
+                `getContext("${contextId}") returns a ${interfaceNames[contextId]}`);
+    assertContextSettings(contextId, context, true);
+  }, `getContext("${contextId}") forwards converted options once when getter leaves context mode as none`);
+}
+
+test(() => {
+  const canvas = new OffscreenCanvas(10, 10);
+  let innerContext;
+  let middleContext;
+  const { options: middleOptions } = optionsWithGetter(() => {
+    innerContext = canvas.getContext('2d');
+  });
+  const { options: outerOptions } = optionsWithGetter(() => {
+    middleContext = canvas.getContext('bitmaprenderer', middleOptions);
+  });
+  const outerContext = canvas.getContext('2d', outerOptions);
+
+  assert_equals(middleContext, null, 'middle getContext("bitmaprenderer") returns null');
+  assert_true(innerContext instanceof OffscreenCanvasRenderingContext2D,
+              'inner getContext("2d") returns an OffscreenCanvasRenderingContext2D');
+  assert_equals(outerContext, innerContext,
+                'outer getContext("2d") returns the context created by the innermost call');
+  assertContextSettings('2d', outerContext, false);
+}, 'Two-level nested re-entrant getContext() dispatches on the final context mode at each frame');
+
+for (const contextId of contextIds) {
+  test(() => {
+    const canvas = new OffscreenCanvas(10, 10);
     let transferredCanvas;
-    const { options } = optionsWithGetter(() => {
+    const { options, state } = optionsWithGetter(() => {
       transferredCanvas = structuredClone(canvas, { transfer: [canvas] });
     });
     assert_throws_dom('InvalidStateError', () => canvas.getContext(contextId, options));
+    assertSingleConversion(state);
+    assert_throws_dom('InvalidStateError', () => canvas.getContext('2d'),
+                      'OffscreenCanvas remains in detached context mode');
     assert_true(transferredCanvas instanceof OffscreenCanvas,
                 'transferring the OffscreenCanvas succeeds');
+    assert_true(transferredCanvas.getContext('2d') instanceof OffscreenCanvasRenderingContext2D,
+                'transferred OffscreenCanvas can create a context');
   }, `getContext("${contextId}") whose options getter transfers the OffscreenCanvas`);
 }
 
 for (const contextId of contextIds) {
   test(() => {
-    requireContextId(contextId);
-
     const canvas = new OffscreenCanvas(10, 10);
     const error = new Error('options getter');
     const { options } = optionsWithGetter(() => {
