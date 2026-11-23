@@ -102,3 +102,48 @@ for (const contextId of contextIds) {
                 `getContext("${otherId}") returns a ${interfaceNames[otherId]}`);
   }, `getContext("${contextId}") whose options getter throws leaves the context mode as none`);
 }
+
+for (const contextId of contextIds) {
+  test(t => {
+    requireContextId(contextId);
+
+    const canvas = new OffscreenCanvas(10, 10);
+    const existing = canvas.getContext(contextId);
+    t.add_cleanup(() => existing?.getExtension?.('WEBGL_lose_context')?.loseContext());
+
+    const { options } = optionsWithGetter(
+      t.unreached_func('options must not be converted when context mode is not none')
+    );
+    assert_equals(canvas.getContext(contextId, options), existing,
+                  'returns the existing context without converting options');
+
+    const otherId = contextId === '2d' ? 'bitmaprenderer' : '2d';
+    assert_equals(canvas.getContext(otherId, options), null,
+                  'returns null for another contextId without converting options');
+  }, `getContext() does not convert options when context mode is already ${contextId}`);
+
+  test(t => {
+    const canvas = new OffscreenCanvas(10, 10);
+    structuredClone(canvas, { transfer: [canvas] });
+
+    const { options } = optionsWithGetter(
+      t.unreached_func('options must not be converted when context mode is detached')
+    );
+    assert_throws_dom('InvalidStateError', () => canvas.getContext(contextId, options));
+  }, `getContext("${contextId}") does not convert options when context mode is already detached`);
+}
+
+test(t => {
+  const canvas = new OffscreenCanvas(10, 10);
+  let innerContext;
+  const contextId = {
+    toString() {
+      innerContext = canvas.getContext('2d');
+      return '2d';
+    },
+  };
+  const { options } = optionsWithGetter(
+    t.unreached_func('options must not be converted after contextId toString() sets context mode')
+  );
+  assert_equals(canvas.getContext(contextId, options), innerContext);
+}, 'getContext() does not convert options when contextId toString() changes context mode');
