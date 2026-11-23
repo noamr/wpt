@@ -102,3 +102,49 @@ for (const contextId of contextIds) {
                 `getContext("${otherId}") returns a ${interfaceNames[otherId]}`);
   }, `getContext("${contextId}") whose options getter throws leaves the context mode as none`);
 }
+
+for (const contextId of contextIds) {
+  test(t => {
+    requireContextId(contextId);
+
+    const canvas = new OffscreenCanvas(10, 10);
+    const existing = canvas.getContext(contextId);
+    t.add_cleanup(() => existing?.getExtension?.('WEBGL_lose_context')?.loseContext());
+
+    const { options: sameOptions, state: sameState } = optionsWithGetter(() => {});
+    assert_equals(canvas.getContext(contextId, sameOptions), existing,
+                  'returns the existing context after converting options');
+    assert_true(sameState.called, 'options getter was invoked for same contextId');
+
+    const otherId = contextId === '2d' ? 'bitmaprenderer' : '2d';
+    const { options: otherOptions, state: otherState } = optionsWithGetter(() => {});
+    assert_equals(canvas.getContext(otherId, otherOptions), null,
+                  'returns null for another contextId after converting options');
+    assert_true(otherState.called, 'options getter was invoked for mismatched contextId');
+  }, `getContext() converts options even when context mode is already ${contextId}`);
+
+  test(() => {
+    const canvas = new OffscreenCanvas(10, 10);
+    structuredClone(canvas, { transfer: [canvas] });
+
+    const error = new Error('options getter');
+    const { options } = optionsWithGetter(() => {
+      throw error;
+    });
+    assert_throws_exactly(error, () => canvas.getContext(contextId, options));
+  }, `getContext("${contextId}") converts options before checking detached context mode`);
+}
+
+test(() => {
+  const canvas = new OffscreenCanvas(10, 10);
+  let innerContext;
+  const contextId = {
+    toString() {
+      innerContext = canvas.getContext('2d');
+      return '2d';
+    },
+  };
+  const { options, state } = optionsWithGetter(() => {});
+  assert_equals(canvas.getContext(contextId, options), innerContext);
+  assert_true(state.called, 'options getter was invoked');
+}, 'getContext() converts options even when contextId toString() changes context mode');
