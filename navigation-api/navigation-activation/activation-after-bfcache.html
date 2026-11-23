@@ -12,11 +12,15 @@
 // is restored from bfcache.
 runBfcacheTest({
   targetOrigin: originSameOrigin,
+  funcBeforeNavigation: () => {
+    window.activationBeforeBFCache = navigation.activation;
+  },
   async funcAfterAssertion(pageA, pageB) {
     const activationData = await pageA.execute_script(() => {
       return { entryURL : navigation.activation.entry.url,
                fromURL : navigation.activation.from.url,
-               navigationType : navigation.activation.navigationType }
+               navigationType : navigation.activation.navigationType,
+               activationReused : navigation.activation === window.activationBeforeBFCache }
     });
 
     // activation.entry should be the currently activated page, and
@@ -30,6 +34,7 @@ runBfcacheTest({
 
     const fromAndEntriesArrayMatch = await pageA.execute_script(() => navigation.activation.from === navigation.entries()[navigation.currentEntry.index + 1]);
     assert_true(fromAndEntriesArrayMatch);
+    assert_true(activationData.activationReused, "navigation.activation must reuse the same object");
   }
 }, "navigation.activation must be updated when restored from bfcache");
 </script>

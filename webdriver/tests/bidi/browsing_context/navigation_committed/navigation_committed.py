@@ -173,6 +173,55 @@ async def test_iframe(
     remove_listener()
 
 
+async def test_navigate_iframe(
+    bidi_session,
+    subscribe_events,
+    top_context,
+    test_page_same_origin_frame,
+    inline,
+    wait_for_bidi_events,
+):
+    await bidi_session.browsing_context.navigate(
+        context=top_context["context"], url=test_page_same_origin_frame, wait="complete"
+    )
+
+    contexts = await bidi_session.browsing_context.get_tree(root=top_context["context"])
+    frame_info = contexts[0]["children"][0]
+
+    events = []
+
+    async def on_event(method, data):
+        events.append(data)
+
+    remove_listener = bidi_session.add_event_listener(
+        NAVIGATION_COMMITTED_EVENT, on_event
+    )
+
+    await subscribe_events(events=[NAVIGATION_COMMITTED_EVENT])
+
+    new_url = inline("<div>iframe navigated</div>")
+    result = await bidi_session.browsing_context.navigate(
+        context=frame_info["context"], url=new_url, wait="complete"
+    )
+
+    await wait_for_bidi_events(events, 1)
+
+    with pytest.raises(TimeoutException):
+        await wait_for_bidi_events(events, 2, timeout=0.5)
+
+    assert_navigation_info(
+        events[0],
+        {
+            "context": frame_info["context"],
+            "navigation": result["navigation"],
+            "url": new_url,
+            **({"userContext": frame_info["userContext"]} if "userContext" in events[0] else {})
+        },
+    )
+
+    remove_listener()
+
+
 async def test_nested_iframes(
     bidi_session,
     subscribe_events,

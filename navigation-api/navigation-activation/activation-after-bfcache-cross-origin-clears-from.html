@@ -14,6 +14,7 @@ runBfcacheTest({
         "_blank", "noopener");
   },
   funcBeforeNavigation: () => {
+    window.activationBeforeBFCache = navigation.activation;
     window.activationFromBeforeBFCache =
         navigation.activation.from?.url ?? null;
   },
@@ -22,13 +23,15 @@ runBfcacheTest({
       return { entryURL : navigation.activation.entry.url,
                fromIsNull : navigation.activation.from === null,
                navigationType : navigation.activation.navigationType,
-               fromBeforeBFCache : window.activationFromBeforeBFCache }
+               fromBeforeBFCache : window.activationFromBeforeBFCache,
+               activationReused : navigation.activation === window.activationBeforeBFCache }
     });
 
     assert_not_equals(activationData.fromBeforeBFCache, null);
     assert_equals(activationData.entryURL, pageA.url);
     assert_true(activationData.fromIsNull);
     assert_equals(activationData.navigationType, "traverse");
+    assert_true(activationData.activationReused, "navigation.activation must reuse the same object");
   }
 }, "navigation.activation.from must be cleared on cross-origin bfcache restoration when it was previously non-null");
 </script>
