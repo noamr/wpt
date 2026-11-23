@@ -1,0 +1,64 @@
+<!doctype html>
+<meta name="timeout" content="long">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/common/utils.js"></script>
+<script src="/common/dispatcher/dispatcher.js"></script>
+<script src="/html/browsers/browsing-the-web/back-forward-cache/resources/helper.sub.js"></script>
+
+<script>
+promise_test(async () => {
+  const pageA = new RemoteContext(token());
+  const pageB = new RemoteContext(token());
+  const pageC = new RemoteContext(token());
+
+  const urlA = originSameOrigin + executorPath + pageA.context_id;
+  const urlB = originSameSite + executorPath + pageB.context_id;
+  const urlC = originSameOrigin + executorPath + pageC.context_id;
+
+  window.open(
+      `resources/bfcache-seed.html?next=${encodeURIComponent(urlA)}`,
+      "_blank", "noopener");
+  await pageA.execute_script(waitForPageShow);
+
+  await pageA.execute_script(url => {
+    window.activationFromBeforeBFCache =
+        navigation.activation.from?.url ?? null;
+    prepareNavigation(() => {
+      navigation.navigate(url, { history: "push" });
+    });
+  }, [urlB]);
+  await pageB.execute_script(waitForPageShow);
+
+  await pageB.execute_script(url => {
+    prepareNavigation(() => {
+      navigation.navigate(url, { history: "push" });
+    });
+  }, [urlC]);
+  await pageC.execute_script(waitForPageShow);
+
+  await pageC.execute_script(() => {
+    prepareNavigation(() => {
+      history.go(-2);
+    });
+  });
+  await pageA.execute_script(waitForPageShow);
+  await assert_bfcached(pageA);
+
+  const activationData = await pageA.execute_script(() => {
+    return {
+      entryURL: navigation.activation.entry.url,
+      entryIsCurrent: navigation.activation.entry === navigation.currentEntry,
+      fromIsNull: navigation.activation.from === null,
+      navigationType: navigation.activation.navigationType,
+      fromBeforeBFCache: window.activationFromBeforeBFCache
+    };
+  });
+
+  assert_not_equals(activationData.fromBeforeBFCache, null);
+  assert_equals(activationData.entryURL, urlA);
+  assert_true(activationData.entryIsCurrent);
+  assert_true(activationData.fromIsNull);
+  assert_equals(activationData.navigationType, "traverse");
+}, "navigation.activation.from must be cleared on bfcache restoration from a non-contiguous same-origin entry when it was previously non-null");
+</script>
